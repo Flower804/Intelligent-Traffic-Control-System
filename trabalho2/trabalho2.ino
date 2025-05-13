@@ -11,9 +11,9 @@
 /* ************************************************************************** */
 
 //LEDS
-int Red_LED = A1;
-int Yellow_LED = A2;
-int Green_LED = A3;
+int Red_LED = 6;
+int Yellow_LED = 7;
+int Green_LED = 9;
 
 int lighting_LED = 11;
 
@@ -31,34 +31,16 @@ int echo_pin = 4;
 
 //7-segment display stuff
 
-int top = 10;
-int top_right = 6;
-int top_left = 7;
-int bottom = 9;
-int middle = 8;
-int bottom_left = 0;
-int bottom_right = 1;
-int dott = 5;
+int bit_1 = 9;
+int bit_2 = 10;
+int bit_3 = 12;
+int bit_4 = 13;
+
+int bit_pins[4] = {bit_1, bit_2, bit_3, bit_4};
 
 //inteligente lighting system
 
 int lum_sensor = A0;
-
-const int display_pins[8] = {top, bottom, middle, top_left, bottom_left, bottom_right, top_right};
-
-bool display_mode[10][7] = {
-  //top,bottom,middle,top left,bottom left,ponto,bottom right,top right
-  {1, 1, 0, 1, 1, 1, 1},
-  {0, 0, 0, 0, 0, 1, 1},
-  {1, 1, 1, 0, 1, 0, 1},
-  {1, 1, 1, 0, 0, 1, 1},
-  {0, 0, 1, 1, 0, 1, 1},
-  {1, 1, 1, 1, 0, 1, 0},
-  {1, 1, 1, 1, 1, 1, 0},
-  {1, 0, 0, 0, 0, 1, 1},
-  {1, 1, 1, 1, 1, 1, 1},
-  {1, 0, 1, 1, 0, 1, 1}
-};
 
 bool other_modes[2][7] = {
   {1, 0, 1, 1, 1, 0, 1},
@@ -66,6 +48,22 @@ bool other_modes[2][7] = {
 };
 
 //----------------------FUNCS----------------------
+
+void dectobin(int n){
+  int binaryNumber[4];
+
+  int i = 0;
+  while(n > 0){
+    binaryNumber[i] = n % 2;
+    n = n / 2;
+    i++;
+  }
+
+  for(int j = i - 1; j >= 0; j--){
+    digitalWrite(bit_pins[j], binaryNumber[j]);
+  }
+}
+
 int light_mode = 0;
 bool change = false;
 unsigned long last_change_time = 0;
@@ -79,18 +77,15 @@ void lighting_sequence(){
   if(beeper_to_play){
     if(millis() - last_beep >= 2000){
       digitalWrite(beeper, HIGH);
-    } else {
-      digitalWrite(beeper, LOW);
     }
-    for(int i = 0; i < 8; i++){
-      digitalWrite(display_pins[i], other_modes[0][i]);
-    }
+  } else {
+    digitalWrite(beeper, LOW);
   }
-
   if((light_mode == 0) && ((millis() - last_change_time) >= 9000)){
     light_mode = 1;
 
     last_change_time = millis();
+    beeper_to_play = false;
   } else if((light_mode == 1) && ((millis() - last_change_time) >= 3000)){
     light_mode = 2;
 
@@ -102,6 +97,8 @@ void lighting_sequence(){
   }
 
   if(light_mode == 0){//turn on green LED
+    beeper_to_play = false;
+
     digitalWrite(Green_LED, HIGH);
     digitalWrite(Yellow_LED, LOW);
     digitalWrite(Red_LED, LOW);
@@ -115,8 +112,6 @@ void lighting_sequence(){
     digitalWrite(Red_LED, HIGH);
     digitalWrite(Green_LED, LOW);
     digitalWrite(Yellow_LED, LOW);
-
-    beeper_to_play = false;
   }
 }
 
@@ -125,11 +120,7 @@ void pedestrian_request(){
   light_mode = 1;
   beeper_to_play = true;
   last_change_time = millis();
-}
-
-bool emergency = false;
-void emergency_request(){
-  emergency = !emergency;
+  lighting_sequence();
 }
 
 void setup() {
@@ -143,22 +134,17 @@ void setup() {
   pinMode(button, INPUT);
   attachInterrupt(0, pedestrian_request, FALLING);
 
-  pinMode(emergency_button, INPUT);
-  attachInterrupt(0, emergency_request, FALLING);
+  pinMode(emergency_button, INPUT_PULLUP); //dont forget to point out that this is important on the essay
 
   //distance sensors
   pinMode(echo_pin, INPUT);
   pinMode(trig_pin, OUTPUT);
 
-  //segment display pinmodes
-  pinMode(top ,OUTPUT);
-  pinMode(top_right ,OUTPUT);
-  pinMode(top_left ,OUTPUT);
-  pinMode(bottom ,OUTPUT);
-  pinMode(middle ,OUTPUT);
-  pinMode(bottom_left ,OUTPUT);
-  pinMode(bottom_right ,OUTPUT);
-  pinMode(dott ,OUTPUT);
+  //7segment display binary outputs
+  pinMode(bit_1, OUTPUT);
+  pinMode(bit_2 , OUTPUT);
+  pinMode(bit_3 , OUTPUT);
+  pinMode(bit_4 , OUTPUT);    
 
   //other stuff
   pinMode(beeper, OUTPUT);
@@ -172,8 +158,30 @@ void setup() {
 unsigned long last_blink;
 bool blink = false;
 bool car = false;
+int pulse;
+int distance;
+int car_counter = 0;
+unsigned long last_car_detected;
+int last_distance;
 
 void economy_mode(){
+  digitalWrite(trig_pin, HIGH);
+  delay(2);
+  digitalWrite(trig_pin, LOW);
+
+  pulse = pulseIn(echo_pin, HIGH);
+  distance = (pulse * 0.034)/2;
+
+  if((distance <= 6) && (distance != last_distance)){
+    last_car_detected = millis();
+    car = true;
+    car_counter++;
+    last_distance = distance;
+  }
+  if(car_counter == 10){
+    car_counter = 0;
+  }
+
   digitalWrite( Red_LED, LOW);
   digitalWrite( Green_LED, LOW);
   if((millis() - last_blink) >= 5000){
@@ -188,18 +196,26 @@ int intensity; //will vary beetwheen 0 -> 255;
 
 void verify_light(){
   current_lumi = analogRead(lum_sensor);
-  Serial.println(current_lumi);
   if(car){
     for(intensity; intensity < 255; intensity = intensity + 10){
       analogWrite(lighting_LED, intensity);
+      delay(50);
     }
     car = false;
+  }
+  if((!car) && (current_lumi > 1000)){
+    for(intensity; intensity <= 127; intensity = intensity - 10){
+      analogWrite(lighting_LED, 127);
+      delay(50);
+    }
   }
 }
 
 bool increasing = false;
 
 void emergency_mode(){
+  digitalWrite( Red_LED, LOW);  
+  digitalWrite( Yellow_LED, LOW);
   if(millis() - last_beep >= 2000){
     digitalWrite(beeper, HIGH);
   } else {
@@ -207,43 +223,29 @@ void emergency_mode(){
   }
   //===== pisca rapidamente itensidade variavel ======
   if(increasing){
-    for(int i = 0; i < 255; i++){
-      analogWrite(lighting_LED, i);
+    for(int i = 0; i < 255; i = i + 10){
+      analogWrite(Green_LED, i);
+      delay(10);
     }
   } else {
-    for(int i = 255; i < 0; i--){
-      analogWrite(lighting_LED, i);
-    }
+    digitalWrite(Green_LED, LOW);
   }
-  //==================================================
-  for(int i = 0; i < 8; i++){
-    digitalWrite(display_pins[i], display_mode[2][i]);
-  }
+  increasing = !increasing;
 }
 
-int pulse;
-int distance;
-int car_counter = 0;
-unsigned long last_car_detected;
 int lumi = 0;
-int mode = 0;
+int mode;
+int buttonState;
+bool emergency = false;
 
 void loop() {
-  digitalWrite(trig_pin, HIGH);
-  delay(2);
-  digitalWrite(trig_pin, LOW);
-  
-  pulse = pulseIn(echo_pin, HIGH);
-  distance = (pulse * 0.034)/2;
+  buttonState = digitalRead(emergency_button);
 
-  if(distance >= 6){
-    last_car_detected = millis();
-    car = true;
-    car_counter++;
+  if(!buttonState){
+    Serial.println("BUTTON CLICKED");
+    emergency = !emergency;
   }
-  if(car_counter == 10){
-    car_counter = 0;
-  }
+
   //decide modes
   if((millis() - last_car_detected) >= 20000){
     mode = 1;
@@ -252,27 +254,41 @@ void loop() {
   }
   //this needs to be here because of the defenition of mode 
   if(emergency){
-    mode = 3;
+    mode = 2;
+  }
+  if(!emergency){
+    digitalWrite(beeper, LOW);
   }
   switch(mode){
     case(0):
       lighting_sequence();
+      Serial.println("lighting_sequence");
+      break;
     case(1):
       economy_mode();
+      Serial.println("economy_mode");
+      break;
     case(2): //emergency case
       emergency_mode();
+      Serial.println("emergency_mode");
+      break;
   } 
-  for(int i = 0; i < 8; i++){
-    digitalWrite(display_pins[i], display_mode[car_counter][i]);
-  }
   verify_light();
-  //Serial.print("distance ");
-  //Serial.print(distance);
-  //Serial.print("\n");
-  //Serial.print("time ");
-  //Serial.print(millis() - last_car_detected);
-  //Serial.print("\n");
-  //Serial.print("lumi ");
-  //Serial.print(lumi);
-  //Serial.print("\n");
+  printdata();
+
+  delay(1000); //TODO: eliminate this
+}
+
+void printdata(){
+  Serial.println("======================");
+  Serial.print("distance: ");
+  Serial.print(distance);
+  Serial.print("\ntime: ");
+  Serial.print(millis() - last_car_detected);
+  Serial.print("\nlumi: ");
+  Serial.print(current_lumi);
+  Serial.print("\ncar count: ");
+  Serial.print(car_counter);
+  Serial.print("\n");
+  Serial.println("======================");
 }
