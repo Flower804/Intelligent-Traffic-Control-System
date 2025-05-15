@@ -42,11 +42,6 @@ int bit_pins[4] = {bit_1, bit_2, bit_3, bit_4};
 
 int lum_sensor = A0;
 
-bool other_modes[2][7] = {
-  {1, 0, 1, 1, 1, 0, 1},
-  {1, 1, 1, 1, 1, 0, 0}
-};
-
 //----------------------FUNCS----------------------
 
 void dectobin(int n){
@@ -192,7 +187,6 @@ void economy_mode(){
 
 int current_lumi;
 int intensity; //will vary beetwheen 0 -> 255;
-//map(frequency, 0, 1023, MIN_VALUE, MAX_VALUE)
 
 void verify_light(){
   current_lumi = analogRead(lum_sensor);
