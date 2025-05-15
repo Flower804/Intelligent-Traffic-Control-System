@@ -159,30 +159,15 @@ int car_counter = 0;
 unsigned long last_car_detected;
 int last_distance;
 
-void economy_mode(){
-  digitalWrite(trig_pin, HIGH);
-  delay(2);
-  digitalWrite(trig_pin, LOW);
-
-  pulse = pulseIn(echo_pin, HIGH);
-  distance = (pulse * 0.034)/2;
-
-  if((distance <= 6) && (distance != last_distance)){
-    last_car_detected = millis();
-    car = true;
-    car_counter++;
-    last_distance = distance;
-  }
-  if(car_counter == 10){
-    car_counter = 0;
-  }
-
+void economy_mode(int car_counter){
   digitalWrite( Red_LED, LOW);
   digitalWrite( Green_LED, LOW);
   if((millis() - last_blink) >= 5000){
     blink = !blink;
   }
   digitalWrite(Yellow_LED, blink);
+
+  dectobin(car_counter);
 }
 
 int current_lumi;
@@ -246,6 +231,24 @@ void loop() {
   } else {
     mode = 0;
   }
+
+  digitalWrite(trig_pin, HIGH);
+  delay(2);
+  digitalWrite(trig_pin, LOW);
+
+  pulse = pulseIn(echo_pin, HIGH);
+  distance = (pulse * 0.034)/2;
+
+  if((distance <= 6) && (distance != last_distance)){
+    last_car_detected = millis();
+    car = true;
+    car_counter++;
+    last_distance = distance;
+  }
+  if(car_counter == 10){
+    car_counter = 0;
+  }
+
   //this needs to be here because of the defenition of mode 
   if(emergency){
     mode = 2;
@@ -259,7 +262,7 @@ void loop() {
       Serial.println("lighting_sequence");
       break;
     case(1):
-      economy_mode();
+      economy_mode(car_counter);
       Serial.println("economy_mode");
       break;
     case(2): //emergency case
